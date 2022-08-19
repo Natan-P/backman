@@ -3,7 +3,10 @@
 #include <X11/Xatom.h>
 #include <Imlib2.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <dirent.h>
 #include "utils.h"
 #include "argparser.h"
 
@@ -12,6 +15,7 @@ Pixmap pix;
 Display *display;
 int screen;
 Imlib_Context context;
+char* randdir;
 
 typedef struct screen {
   Screen *screen;
@@ -58,10 +62,43 @@ setRootAtoms(Pixmap pixmap)
   return 1;
 }
 
-// loads image into 
+// loads image into img global
 int loadimage(char* state, const char* bgimg, Screen *screen) {
-  Imlib_Image buffer;
-  buffer = imlib_load_image(bgimg);
+  Imlib_Image buffer = NULL;
+  if (strcmp(bgimg, "--random") == 0) {
+    DIR *dp;
+    struct dirent *ep;     
+    dp = opendir(randdir);
+    int direntries = 0;
+    if (dp != NULL) {
+      while ((ep = readdir(dp)) != NULL) {
+        if (strcmp(ep->d_name, ".") != 0 && strcmp(ep->d_name, "..") != 0) {
+          direntries++; }
+      }
+      char* ents[direntries];
+      seekdir(dp, 0);
+      direntries = 0;
+      while ((ep = readdir(dp)) != NULL) {
+        if (strcmp(ep->d_name, ".") != 0 && strcmp(ep->d_name, "..") != 0) {
+          ents[direntries] = ep->d_name;
+          direntries++;
+        }
+      }
+      char* select = ents[rand() % (direntries)]; // generate random number that gets modulo'd down to the number of files in the directory
+      char final[256];
+      strcpy(final, randdir);
+      strcat(final, select);
+      buffer = imlib_load_image(final);
+      (void) closedir(dp);
+    } else {
+      perror("Couldn't open the directory!\n");
+      exit(-1);
+    }
+  }
+  if (buffer == NULL) {
+    buffer = imlib_load_image(bgimg);
+    //printf("%s\n", bgimg);
+  }
   imlib_context_set_image(buffer);
   if (! buffer) {
     printf("Failed to open image!\n");
@@ -85,11 +122,20 @@ int loadimage(char* state, const char* bgimg, Screen *screen) {
 }
 
 int main(int argc, char **argv) {
+  srand((unsigned) time(NULL));
   display = XOpenDisplay(NULL);
   if (! display) {
     printf("Can't open X display!");
     return 123;
   }
+
+  char** args = getArgs(argc, argv);
+  if (args == NULL) {
+    return 0;
+  }
+  
+  if (strcmp(args[1], "--random") == 0) strcpy(randdir, args[2]);
+  printf("%s", randdir);
 
   for (int screen = 0; screen < ScreenCount(display); screen++) {
     context = imlib_context_new();
@@ -103,13 +149,6 @@ int main(int argc, char **argv) {
      
     pix = XCreatePixmap(display, RootWindow(display, screen), width, height, scr->root_depth);
     imlib_context_set_drawable(pix);
-    
-    // big argv parser boye
-    char** args = getArgs(argc, argv);
-    if (args == NULL) { 
-      printf("Args are null.\n");
-      return 0;
-    }
     
     if (loadimage("stretch", args[1], scr) == 0) {
       printf("Bad image.\n");
@@ -137,6 +176,7 @@ int main(int argc, char **argv) {
     imlib_context_free(context);
   }
   
+  free(args);
   XFree(display);
   return 0;
 }
