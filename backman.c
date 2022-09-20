@@ -2,6 +2,8 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <Imlib2.h>
+#include <bits/time.h>
+#include <bits/types/struct_timeval.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,12 +19,7 @@ int screen;
 Imlib_Context context;
 char* randdir;
 
-typedef struct screen {
-  Screen *screen;
-  int width;
-  int height;
-} Scr;
-
+int setRootAtoms(Pixmap);
 // copy-paste from hsetroot, i have a minimal clue of what this thing does,
 // but i do know that without it, this mess of a program wouldn't work...
 // left formatting from source code so you can really see who wrote this code.
@@ -62,70 +59,15 @@ setRootAtoms(Pixmap pixmap)
   return 1;
 }
 
-// loads image into img global
-int loadimage(char* state, const char* bgimg, Screen *screen) {
-  Imlib_Image buffer = NULL;
-  if (strcmp(bgimg, "--random") == 0) {
-    DIR *dp;
-    struct dirent *ep;     
-    dp = opendir(randdir);
-    int direntries = 0;
-    if (dp != NULL) {
-      while ((ep = readdir(dp)) != NULL) {
-        if (strcmp(ep->d_name, ".") != 0 && strcmp(ep->d_name, "..") != 0) {
-          direntries++; }
-      }
-      char* ents[direntries];
-      seekdir(dp, 0);
-      direntries = 0;
-      while ((ep = readdir(dp)) != NULL) {
-        if (strcmp(ep->d_name, ".") != 0 && strcmp(ep->d_name, "..") != 0) {
-          ents[direntries] = ep->d_name;
-          direntries++;
-        }
-      }
-      char* select = ents[rand() % (direntries)]; // generate random number that gets modulo'd down to the number of files in the directory
-      char final[256];
-      strcpy(final, randdir);
-      strcat(final, select);
-      buffer = imlib_load_image(final);
-      (void) closedir(dp);
-    } else {
-      perror("Couldn't open the directory!\n");
-      exit(-1);
-    }
-  }
-  if (buffer == NULL) {
-    buffer = imlib_load_image(bgimg);
-    //printf("%s\n", bgimg);
-  }
-  imlib_context_set_image(buffer);
-  if (! buffer) {
-    printf("Failed to open image!\n");
-    imlib_context_set_image(buffer);
-    imlib_free_image();
-    return 0;
-  }
-  int imgW = imlib_image_get_width(), imgH = imlib_image_get_height();
-  int scrW = screen->width, scrH = screen->height;
-  
-  img = imlib_create_image(scrW, scrH);
 
-  imlib_context_set_image(img);
-  imlib_blend_image_onto_image(buffer, 0, 0, 0,
-    imgW, imgH, 0, 0, scrW, scrH);
 
-  imlib_context_set_image(buffer);
-  imlib_free_image();
-  imlib_context_set_image(img);
-  return 1;
-}
-
-int main(int argc, char **argv) {
-  srand((unsigned) time(NULL));
+int main(int argc, char* *argv) {
+  struct timespec time;
+  clock_gettime(CLOCK_MONOTONIC_RAW, &time);
+  srand(time.tv_nsec);
   display = XOpenDisplay(NULL);
   if (! display) {
-    printf("Can't open X display!");
+    printf("Can't open X display!\n");
     return 123;
   }
 
@@ -133,9 +75,10 @@ int main(int argc, char **argv) {
   if (args == NULL) {
     return 0;
   }
-  
-  if (strcmp(args[1], "--random") == 0) strcpy(randdir, args[2]);
-  printf("%s", randdir);
+
+  if (strcmp(args[1], "--random") == 0) {
+    randdir = args[2];
+  }
 
   for (int screen = 0; screen < ScreenCount(display); screen++) {
     context = imlib_context_new();
@@ -150,8 +93,9 @@ int main(int argc, char **argv) {
     pix = XCreatePixmap(display, RootWindow(display, screen), width, height, scr->root_depth);
     imlib_context_set_drawable(pix);
     
-    if (loadimage("stretch", args[1], scr) == 0) {
+    if (loadimage(args[1], scr) == 0) {
       printf("Bad image.\n");
+      free(args);
       return 1;
     }
     
