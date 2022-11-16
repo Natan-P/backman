@@ -10,7 +10,7 @@
 #include <time.h>
 #include <dirent.h>
 #include "utils.h"
-#include "argparser.h"
+#include "imgutils.h"
 
 Imlib_Image img;
 Pixmap pix;
@@ -71,13 +71,13 @@ int main(int argc, char* *argv) {
     return 123;
   }
 
-  char** args = getArgs(argc, argv);
+  data* args = getArgs(argc, argv);
   if (args == NULL) {
     return 0;
   }
 
-  if (strcmp(args[1], "--random") == 0) {
-    randdir = args[2];
+  if ((args->i & 1) == 1) {
+    randdir = args[0].s;
   }
 
   for (int screen = 0; screen < ScreenCount(display); screen++) {
@@ -93,7 +93,9 @@ int main(int argc, char* *argv) {
     pix = XCreatePixmap(display, RootWindow(display, screen), width, height, scr->root_depth);
     imlib_context_set_drawable(pix);
     
-    if (loadimage(args[1], scr) == 0) {
+    img = imlib_create_image(scr->width, scr->height);
+
+    if (loadimage(args, img, scr) == 0) {
       printf("Bad image.\n");
       free(args);
       return 1;

@@ -54,13 +54,13 @@ data* getArgs(int argc, char **argv) {
   for (int i = 1; i < argc; i++) {
     /* bitmask setters */
     if ((x = valueinarray(argv[i], opts, size)) > -1 && 
-        !((ret[1].i & fillBitRange(8, 32)) > 0)){ masked |= 0b001; ret[1].i |= x << 8; }
+        !((ret[1].i & fillBitRange(8, 16)) > 0)){ masked |= 0b001; ret[1].i |= (x+1) << 8; }
     //    ^----------------------------------^
     // check if this option has already been defined
-    if (valueinarray(argv[i], others, othersize) > -1 &&
-        (ret[1].i & 1) > 0)                     { masked |= 0b010; ret[1].i |= 1; }
-    if (access(argv[i], R_OK) > -1)             { masked |= 0b100; }
-    if ((masked & 0b100) > 0 && (masked & 0b011) > 0) { 
+    if ((x = valueinarray(argv[i], others, othersize)) > -1 &&
+        (ret[1].i & 1) < 1)                     { masked |= 0b010; ret[1].i |= 1 << x; }
+    if (access(argv[i], R_OK) > -1)             { masked |= 0b100; strcpy(ret[0].s, argv[i]); }
+    if ((masked & 0b111) > 4) { // are image bit *and* other bits set?
       printf("Please don't name your images the same as potential arguments.\n");
       masked = 0; 
     } // if it is both an image name and an argument, raise error 
