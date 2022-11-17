@@ -1,9 +1,10 @@
-#ifndef _ARGPARSE_H_
-  typedef union {
-    char s[4096];
-    int i;
-  } data;
-  #define _ARGPARSE_H_
-  data* getArgs(int argc, char **argv);
-#endif
+#pragma once
 
+#define MAGIC_BITS 6
+#define IMAGE_BITS 3
+
+typedef union {
+  char s[4096];
+  unsigned long i;
+} data;
+data* getArgs(int argc, char **argv);

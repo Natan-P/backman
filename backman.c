@@ -10,7 +10,10 @@
 #include <time.h>
 #include <dirent.h>
 #include "utils.h"
+#include "argparser.h"
 #include "imgutils.h"
+
+#define __FREEALL_MAIN free(args); XFree(display);
 
 Imlib_Image img;
 Pixmap pix;
@@ -59,8 +62,6 @@ setRootAtoms(Pixmap pixmap)
   return 1;
 }
 
-
-
 int main(int argc, char* *argv) {
   struct timespec time;
   clock_gettime(CLOCK_MONOTONIC_RAW, &time);
@@ -73,6 +74,7 @@ int main(int argc, char* *argv) {
 
   data* args = getArgs(argc, argv);
   if (args == NULL) {
+    __FREEALL_MAIN
     return 0;
   }
 
@@ -97,7 +99,7 @@ int main(int argc, char* *argv) {
 
     if (loadimage(args, img, scr) == 0) {
       printf("Bad image.\n");
-      free(args);
+      __FREEALL_MAIN
       return 1;
     }
     
