@@ -39,6 +39,42 @@ static inline int fillBitRange(short s, short e) {
   return ((1<<(s))-1)^((1<<(e))-1);
 }
 
+short mask = 0b000;  // bitmask of expected args; bits meaning [other image options, image, standard arg]
+short masked = 0b000;  // bitmask for the parsed args, aka what was actually passed
+
+char funcerror = 0;
+void anglefunc(char** argv, int* i, data* ret) {
+  char* errptr;
+  int angle = strtol(argv[++(*i)], &errptr, 10);
+  if (angle > 360 || angle < 0 || *errptr != 0 || errno == ERANGE || ret[1].i >> MAGIC_BITS != 4) {
+    puts("Bad angle input, currently only supported with tiled.\n");
+    __FREEALL_ARGPARSE
+    funcerror = 'L';
+  }
+  ret[1].i |= angle << (MAGIC_BITS + IMAGE_BITS);
+  masked |= 0b010;
+}
+
+void scalefunc(char** argv, int* i, data* ret) {
+  if (SEPERATE_SIZING) {
+    char* errptr;
+    double dbl = (strtod(argv[++(*i)], &errptr));
+    ret[2].i = *((unsigned long *) &dbl);
+    if (*errptr != 0 || errno == ERANGE) {
+      puts("Bad scaling input!\n");
+      __FREEALL_ARGPARSE
+      funcerror = 'L';
+    }
+    masked |= 0b010;
+  } else {
+    printf("fuck");
+    __FREEALL_ARGPARSE
+    funcerror = 'L';
+  }
+}
+
+void doNothing(char** a, int* b, data* c) {};  // can't just feed in NULL so this is the closest to that
+
 #define IMGOPTLISTSIZE 6
 char* imgopts[] = {"", "stretch", "fill", "cover", "tile", "extend"};
 char* shortimgs[] = {"", "S", "F", "C", "T", "E"};
@@ -48,17 +84,15 @@ char* shortimgs[] = {"", "S", "F", "C", "T", "E"};
 
 char** imglists[] = {imgopts, shortimgs};
 
-#define OTHEROPTLISTSIZE 3
-char* others[] = {"", "angle", "scale"};  // 1st gets autofilled if "image" is a directory
-char* shortothers[] = {"", "a", "s"};
-#if (OTHEROPTLISTSIZE > ((1 << MAGIC_BITS) - 1))
+#define OTHEROPTLISTSIZE 6
+char* others[] = {"", "angle", "scale", "randomtiles", "hdiff", "vdiff"};  // 1st gets autofilled if "image" is a directory
+char* shortothers[] = {"", "a", "s", "", "h", "v"};
+void (*otherfunc[])(char**, int*, data*) = {doNothing, anglefunc, scalefunc, doNothing, doNothing, doNothing};  // what functions get called 
+#if (OTHEROPTLISTSIZE > MAGIC_BITS)
   #error "fuck but different"
 #endif
 
 char** magiclists[] = {others, shortothers};
-
-short mask = 0b000;  // bitmask of expected args; bits meaning [other image options, image, standard arg]
-short masked = 0b000;  // bitmask for the parsed args, aka what was actually passed
 
 char* getcharfromstring(char* dest, char* src, size_t num) {
   dest[0] = src[num];
@@ -68,8 +102,6 @@ char* getcharfromstring(char* dest, char* src, size_t num) {
 
 data* getArgs(int argc, char **argv) {
   int whatlist = 2;
-  int whatsmall = 0;
-  char whichsmall[2] = "L";
   if (argc < 2) { printf("%s", usage); exit(1); }
   mask = 0b001;  // a standard arg is expected at the beginning
 //masked = 0b000;  // reminder that this boye has been initiated at 000
@@ -83,52 +115,44 @@ data* getArgs(int argc, char **argv) {
   */
   int x; // temp value for valueinarray bits
   for (int i = 1; i < argc; i++) {
-    whatsmall = 0;
     whatlist = 2;
     /* bitmask setters */
     if (argv[i][0] == '-') { // is short arg?
       whatlist = 1;
       if (argv[i][1] == '-') whatlist = 0;
     }
-    if (whatlist < 2) {
-      //                            pretty much just slice a string
-      //                                           vv
-      if ((x = valueinarray(whatlist == 0 ? argv[i]+2 : getcharfromstring(whichsmall, argv[i], 1+(whatsmall++)), imglists[whatlist], IMGOPTLISTSIZE)) > -1 && 
+
+    if (whatlist == 0) {
+      if ((x = valueinarray(argv[i]+2, imglists[whatlist], IMGOPTLISTSIZE)) > -1 && 
           !((ret[1].i & fillBitRange(MAGIC_BITS, MAGIC_BITS+IMAGE_BITS)) > 0))
    //       ^----------------------------------------------------------^
    //             check if this option has already been defined
-            { masked |= 0b001; ret[1].i |= x << MAGIC_BITS; } else if (whatlist == 1) whatsmall--; // if short arg failed, revert it
-      else if ((x = valueinarray(whatlist == 0 ? argv[i]+2 : getcharfromstring(whichsmall, argv[i], 1+(whatsmall++)), magiclists[whatlist], OTHEROPTLISTSIZE)) > -1 &&
-        (ret[1].i & (1 << x)) < 1) { masked |= 0b010; ret[1].i |= 1 << x; 
-        if (strcmp(argv[i], "--scale") == 0 && i < argc) {
-          if (SEPERATE_SIZING) {
-            char* errptr;
-            double dbl = (strtod(argv[++i], &errptr));
-            ret[2].i = *((unsigned long *) &dbl);
-            if (*errptr != 0 || errno == ERANGE) {
-              puts("Bad scaling input!\n");
-              __FREEALL_ARGPARSE
-              return(NULL);
-            }
-            masked |= 0b010;
-          } else {
-            printf("fuck");
-            __FREEALL_ARGPARSE
-            return(NULL);
-          }
-        } else if (strcmp(argv[i], "--angle") == 0 && i < argc) {  // i won't even fucking bother with short args
-          char* errptr;
-          int angle = strtol(argv[++i], &errptr, 10);
-          if (angle > 360 || angle < 0 || *errptr != 0 || errno == ERANGE || ret[1].i >> MAGIC_BITS != 4) {
-            puts("Bad angle input, currently only supported with tiled.\n");
-            __FREEALL_ARGPARSE
-            return(NULL);
-          }
-          ret[1].i |= angle << (MAGIC_BITS + IMAGE_BITS);
+            { masked |= 0b001; ret[1].i |= x << MAGIC_BITS; }
+      else if ((x = valueinarray(argv[i]+2, magiclists[0], OTHEROPTLISTSIZE)) > -1 &&
+          (ret[1].i & (1 << x)) < 1) {
+        masked |= 0b010;
+        ret[1].i |= 1 << x; 
+        (*otherfunc[x])(argv, &i, ret);
+        if (funcerror != 0) return NULL;
+      }
+    } else if (whatlist == 1) {
+      char whichsmall[2] = "L";
+      for (int whatsmall = 1; whatsmall < strlen(argv[i]); whatsmall++) {
+        getcharfromstring(whichsmall, argv[i], whatsmall);
+
+        if ((x = valueinarray(whichsmall, shortimgs, IMGOPTLISTSIZE)) > 1 &&
+            !((ret[1].i & fillBitRange(MAGIC_BITS, MAGIC_BITS+IMAGE_BITS)) > 0)) {
+          masked |= 0b001; ret[1].i |= x << MAGIC_BITS;  
+        } else if ((x = valueinarray(whichsmall, shortothers, OTHEROPTLISTSIZE)) > -1 &&
+            (ret[1].i & (1 << x)) < 1) {
           masked |= 0b010;
+          ret[1].i |= (1 << x);
+          (*otherfunc[x])(argv, &i, ret);
+          if (funcerror != 0) return NULL;
         }
-      } else if (whatlist == 1) whatsmall--;
+      }
     }
+
     if (access(argv[i], R_OK) > -1) {
       masked |= 0b100;
       strcpy(ret[0].s, argv[i]);
