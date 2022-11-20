@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <bsd/string.h>
+#include <limits.h>
 #include "argparser.h"
 #include "imgutils.h"
 #include "utils.h"
@@ -11,7 +12,8 @@
 #define optbits data[1].i
 #define imgbits ((data[1].i >> MAGIC_BITS) & ((1 << IMAGE_BITS) - 1))
 
-#define __FREEALL_ENTS if ((data[1].i & 1) == 1 || c) { \
+#define __FREEALL_ENTS \
+  if ((data[1].i & 1) == 1 || c) { \
     for (int i = 0; i < direntries; i++) { \
       if (ents[i] != 0) { \
         imlib_context_set_image(ents[i]); \
@@ -30,6 +32,7 @@ int loadimage(data* data, Imlib_Image imag, Screen *screen) {
   Imlib_Image* ents;
   int c = ((imgbits == 4) && ((data[1].i & (1 << 3)) > 1));
   int direntries = 0;
+  int minImgW = INT_MAX, minImgH = INT_MAX;
   if ((data[1].i & 1) == 1 || c) {
     Imlib_Image temp = NULL;
     DIR *dp;
@@ -49,12 +52,14 @@ int loadimage(data* data, Imlib_Image imag, Screen *screen) {
       temp = imlib_load_image(tempname);
       if (temp != NULL) {
         imlib_context_set_image(temp);
+        if (imlib_image_get_width() < minImgW) minImgW = imlib_image_get_width();
+        if (imlib_image_get_height() < minImgH) minImgH = imlib_image_get_height();
         ents[direntries] = imlib_load_image(tempname);
         imlib_free_image();
         direntries++;
       }
     }
-    if (ents[0] == NULL) { 
+    if (direntries == 0) { // yeah i could do !direntries but i want readability, you know?
       free(ents);
       return 0;
     }
@@ -74,15 +79,28 @@ int loadimage(data* data, Imlib_Image imag, Screen *screen) {
     return 0;
   }
   imlib_context_set_image(buffer);
-  int imgW = imlib_image_get_width(), imgH = imlib_image_get_height();
+  int imgW, imgH;
+  if (c) imgW = minImgW, imgH = minImgH;
+  else   imgW = imlib_image_get_width(), imgH = imlib_image_get_height();
   int scrW = screen->width, scrH = screen->height;
 
   if ((data[1].i & (1 << 2)) > 1 && (*((double*)(&data[2].i)) != 1)) {
     double scale = *((double*)(&data[2].i));
-    Imlib_Image temp = imlib_create_cropped_scaled_image(0, 0, imgW, imgH, imgW*scale, imgH*scale);
-    imlib_context_set_image(temp);
-    buffer = imlib_clone_image();
-    imlib_free_image();
+    if (c) {
+      for (int i = 0; i < direntries; i++) {
+        imlib_context_set_image(ents[i]);
+        Imlib_Image temp = imlib_create_cropped_scaled_image(0, 0, imgW, imgH, imgW*scale, imgH*scale);
+        imlib_context_set_image(temp);
+        ents[i] = imlib_clone_image();
+        imlib_free_image();
+      }
+    }
+    else {
+      Imlib_Image temp = imlib_create_cropped_scaled_image(0, 0, imgW, imgH, imgW*scale, imgH*scale);
+      imlib_context_set_image(temp);
+      buffer = imlib_clone_image();
+      imlib_free_image();
+    }
     imgW*=scale;
     imgH*=scale;
   }
@@ -178,7 +196,7 @@ int loadimage(data* data, Imlib_Image imag, Screen *screen) {
   imlib_free_image();
   imlib_context_set_image(img);
 
-  if (!wasthereanerror) {
+  if (wasthereanerror == 1) {
     return 0;
   }
   

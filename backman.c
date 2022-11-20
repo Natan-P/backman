@@ -25,7 +25,7 @@ char* randdir;
 int setRootAtoms(Pixmap);
 // copy-paste from hsetroot, i have a minimal clue of what this thing does,
 // but i do know that without it, this mess of a program wouldn't work...
-// left formatting from source code so you can really see who wrote this code.
+// left formatting from source code so you can really see who wrote this code (hint: not me).
 int
 setRootAtoms(Pixmap pixmap)
 {

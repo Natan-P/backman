@@ -1,5 +1,5 @@
 CC := gcc
-ARGS := $(CC) -Wall -lX11 -lImlib2 -lm
+ARGS := $(CC) -Wall -lX11 -lImlib2 -lm -lbsd
 
 install: backman.c utils.c argparser.c imgutils.c
 	$(ARGS) -g -O0 -o out.o backman.c utils.c argparser.c imgutils.c
