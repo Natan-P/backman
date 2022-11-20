@@ -3,13 +3,24 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <bsd/string.h>
 #include "argparser.h"
 #include "imgutils.h"
 #include "utils.h"
 
 #define optbits data[1].i
 #define imgbits ((data[1].i >> MAGIC_BITS) & ((1 << IMAGE_BITS) - 1))
+
+#define __FREEALL_ENTS if ((data[1].i & 1) == 1 || c) { \
+    for (int i = 0; i < direntries; i++) { \
+      if (ents[i] != 0) { \
+        imlib_context_set_image(ents[i]); \
+        imlib_free_image(); \
+      } \
+      else break; \
+    } \
+    free(ents); \
+  }
 
 extern char* randdir;
 extern Imlib_Image img;
@@ -30,11 +41,11 @@ int loadimage(data* data, Imlib_Image imag, Screen *screen) {
     while ((ep = readdir(dp)) != NULL) {
       if (direntries >= mall) { // lets make sure our array is large enough
         mall *= 2;
-        ents = (Imlib_Image*) realloc(ents, mall * sizeof(char[256]));
+        ents = (Imlib_Image*) realloc(ents, mall * sizeof(Imlib_Image));
       }
       strcpy(tempname, "");
-      strcpy(tempname, randdir);
-      strcat(tempname, ep->d_name);
+      strlcpy(tempname, randdir, 4096);
+      strlcat(tempname, ep->d_name, 4096);
       temp = imlib_load_image(tempname);
       if (temp != NULL) {
         imlib_context_set_image(temp);
@@ -43,7 +54,10 @@ int loadimage(data* data, Imlib_Image imag, Screen *screen) {
         direntries++;
       }
     }
-    if (ents[0] == NULL) return 0;
+    if (ents[0] == NULL) { 
+      free(ents);
+      return 0;
+    }
     buffer = ents[rand() % (direntries)]; // generate random number that gets modulo'd down to the number of files in the directory
     (void) closedir(dp);
   }
@@ -56,6 +70,7 @@ int loadimage(data* data, Imlib_Image imag, Screen *screen) {
     printf("Failed to open image!\n");
     imlib_context_set_image(buffer);
     imlib_free_image();
+    __FREEALL_ENTS;
     return 0;
   }
   imlib_context_set_image(buffer);
@@ -83,6 +98,7 @@ int loadimage(data* data, Imlib_Image imag, Screen *screen) {
     scrW = (int) sqrt((double) scrW * scrW + (double) scrH * scrH);
     scrH = scrW; // make sure that the whole rotated area is filled
   }
+  int wasthereanerror = 0;
 
   switch (imagenum) {
     case 1:
@@ -152,23 +168,19 @@ int loadimage(data* data, Imlib_Image imag, Screen *screen) {
       break;
 
     default:
-      return 0;
+      wasthereanerror = 1;
+      break;
   }
 
-  if ((data[1].i & 1) == 1 || c) {
-    for (int i = 0; i < direntries; i++) {
-      if (ents[i] != 0) {
-        imlib_context_set_image(ents[i]);
-        imlib_free_image();
-      }
-      else break;
-    }
-    free(ents);
-  }
+  __FREEALL_ENTS
 
   imlib_context_set_image(buffer);
   imlib_free_image();
   imlib_context_set_image(img);
+
+  if (!wasthereanerror) {
+    return 0;
+  }
   
   return 1;
 }

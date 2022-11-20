@@ -12,12 +12,3 @@ int valueinarray(char *val, char* arr[], int size) {
   }
   return -1;
 }
-
-int approxsqrt(int val) {
-  int ctr = 1, root = 1;
-  for (;root<val;) {
-    ctr++;
-    root = ctr*ctr;
-  }
-  return ctr;
-}

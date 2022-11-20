@@ -3,7 +3,7 @@
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <bsd/string.h>
 #include <unistd.h>
 #include <errno.h>
 #include "utils.h"
@@ -51,7 +51,7 @@ void anglefunc(char** argv, int* i, data* ret) {
     __FREEALL_ARGPARSE
     funcerror = 'L';
   }
-  ret[1].i |= angle << (MAGIC_BITS + IMAGE_BITS);
+  else ret[1].i |= angle << (MAGIC_BITS + IMAGE_BITS);
   masked |= 0b010;
 }
 
@@ -155,7 +155,7 @@ data* getArgs(int argc, char **argv) {
 
     if (access(argv[i], R_OK) > -1) {
       masked |= 0b100;
-      strcpy(ret[0].s, argv[i]);
+      strlcpy(ret[0].s, argv[i], 4096);
       struct stat statbuf;
       stat(argv[i], &statbuf);
       if (S_ISDIR(statbuf.st_mode) == 1) ret[1].i |= 1;
