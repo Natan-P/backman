@@ -12,6 +12,7 @@
 char* usage = 
 "Backman - an app, that barely works, but just does. \n"
 "Syntax: backman <option [arg]>... \n"
+"p.s. arguments should start with a fill option\n"
 "Fill options:\n"
 "-S, --stretch <img>:   render the image stretched to fill the screen\n"
 "-F, --fill <img>:      render the image in aspect with borders\n"
