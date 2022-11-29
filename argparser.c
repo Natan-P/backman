@@ -11,13 +11,21 @@
 
 char* usage = 
 "Backman - an app, that barely works, but just does. \n"
-"Syntax: backman <--option arg>... \n"
+"Syntax: backman <option [arg]>... \n"
 "Fill options:\n"
-"--stretch <img>: render the image stretched to fill the screen\n"
+"-S, --stretch <img>:   render the image stretched to fill the screen\n"
+"-F, --fill <img>:      render the image in aspect with borders\n"
+"-C, --cover <img>:     render the image in aspect to completely cover the screen\n"
+"-T, --tile <img>:      render the image tiled\n"
+"\n"
 "Image options:\n"
-"You may replace <img> with either:\n"
-"A path to an image file, or\n"
-"the --random option, followed by a directory, containing ONLY image files, no other directories or files.\n"
+"<img> may be a path to an image, or a directory from which to choose a random image\n"
+"\n"
+"Tiling options:\n"
+"-a, --angle:   render the tiled images at an angle. (0 < input <= 360)\n"
+"-s, --scale:   scale the tiles (0 < input)\n"
+"--randomtiles: randomize the tiles, taking them from <img> (<img> must be a folder)\n"
+"-h, --hdiff:   unlock the horizontal size, allowing for differently large tiles\n"
 "";
 
 #define SEPERATE_SIZING 1
@@ -43,51 +51,66 @@ short mask = 0b000;  // bitmask of expected args; bits meaning [other image opti
 short masked = 0b000;  // bitmask for the parsed args, aka what was actually passed
 
 char funcerror = 0;
+char funcfinished = 0;
 void anglefunc(char** argv, int* i, data* ret) {
   char* errptr;
+  if (argv[(*i+1)] == NULL) {
+    puts("No angle input!");
+    __FREEALL_ARGPARSE
+    funcerror = 'L';
+    return;
+  }
   int angle = strtol(argv[++(*i)], &errptr, 10);
   if (angle > 360 || angle < 0 || *errptr != 0 || errno == ERANGE || ret[1].i >> MAGIC_BITS != 4) {
-    puts("Bad angle input, currently only supported with tiled.\n");
+    puts("Bad angle input, currently only supported with tiled.");
     __FREEALL_ARGPARSE
     funcerror = 'L';
   }
   else ret[1].i |= angle << (MAGIC_BITS + IMAGE_BITS);
   masked |= 0b010;
+  funcfinished = 1;
 }
 
 void scalefunc(char** argv, int* i, data* ret) {
+  if (argv[(*i+1)] == NULL) {
+    puts("No scale input!");
+    __FREEALL_ARGPARSE
+    funcerror = 'L';
+    return;
+  }
   if (SEPERATE_SIZING) {
     char* errptr;
     double dbl = (strtod(argv[++(*i)], &errptr));
     ret[2].i = *((unsigned long *) &dbl);
     if (*errptr != 0 || errno == ERANGE) {
-      puts("Bad scaling input!\n");
+      puts("Bad scaling input!");
       __FREEALL_ARGPARSE
       funcerror = 'L';
     }
     masked |= 0b010;
   } else {
-    printf("fuck");
+    puts("fuck");
     __FREEALL_ARGPARSE
     funcerror = 'L';
   }
+  funcfinished = 1;
 }
 
 void doNothing(char** a, int* b, data* c) {};  // can't just feed in NULL so this is the closest to that
 
-#define IMGOPTLISTSIZE 6
-char* imgopts[] = {"", "stretch", "fill", "cover", "tile", "extend"};
-char* shortimgs[] = {"", "S", "F", "C", "T", "E"};
+#define IMGOPTLISTSIZE 5
+char* imgopts[] = {"", "stretch", "fill", "cover", "tile"};
+char* shortimgs[] = {"", "S", "F", "C", "T"};
 #if (IMGOPTLISTSIZE > ((1 << IMAGE_BITS) - 1))
   #error "fuck"
 #endif
 
 char** imglists[] = {imgopts, shortimgs};
 
-#define OTHEROPTLISTSIZE 6
-char* others[] = {"", "angle", "scale", "randomtiles", "hdiff", "vdiff"};  // 1st gets autofilled if "image" is a directory
-char* shortothers[] = {"", "a", "s", "", "h", "v"};
-void (*otherfunc[])(char**, int*, data*) = {doNothing, anglefunc, scalefunc, doNothing, doNothing, doNothing};  // what functions get called 
+#define OTHEROPTLISTSIZE 5
+char* others[] = {"", "angle", "scale", "randomtiles", "hdiff"};  // 1st gets autofilled if "image" is a directory
+char* shortothers[] = {"", "a", "s", "", "h", ""};
+void (*otherfunc[])(char**, int*, data*) = {doNothing, anglefunc, scalefunc, doNothing, doNothing};  // what functions get called 
 #if (OTHEROPTLISTSIZE > MAGIC_BITS)
   #error "fuck but different"
 #endif
@@ -137,6 +160,7 @@ data* getArgs(int argc, char **argv) {
       }
     } else if (whatlist == 1) {
       char whichsmall[2] = "L";
+      funcfinished = 0;
       for (int whatsmall = 1; whatsmall < strlen(argv[i]); whatsmall++) {
         getcharfromstring(whichsmall, argv[i], whatsmall);
 
@@ -149,6 +173,7 @@ data* getArgs(int argc, char **argv) {
           ret[1].i |= (1 << x);
           (*otherfunc[x])(argv, &i, ret);
           if (funcerror != 0) return NULL;
+          if (funcfinished) break;
         }
       }
     }
@@ -161,7 +186,7 @@ data* getArgs(int argc, char **argv) {
       if (S_ISDIR(statbuf.st_mode) == 1) ret[1].i |= 1;
     }
     if ((masked & 0b111) > 4) { // are image bit *and* other bits set?
-      printf("Please escape image names that start with a dash with `./'\n");
+      puts("Please escape image names that start with a dash with `./'");
       masked = 0; 
     } // if it is both an image name and an argument, raise error 
     /* bitmask testers */

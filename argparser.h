@@ -1,6 +1,6 @@
 #pragma once
 
-#define MAGIC_BITS 6
+#define MAGIC_BITS 5
 #define IMAGE_BITS 3
 
 typedef union {

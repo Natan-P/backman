@@ -89,7 +89,8 @@ int loadimage(data* data, Imlib_Image imag, Screen *screen) {
     if (c) {
       for (int i = 0; i < direntries; i++) {
         imlib_context_set_image(ents[i]);
-        Imlib_Image temp = imlib_create_cropped_scaled_image(0, 0, imgW, imgH, imgW*scale, imgH*scale);
+        int currW = imlib_image_get_width(), currH = imlib_image_get_height();
+        Imlib_Image temp = imlib_create_cropped_scaled_image(0, 0, currW, currH, currW*scale, currH*scale);
         imlib_context_set_image(temp);
         ents[i] = imlib_clone_image();
         imlib_free_image();
@@ -109,7 +110,7 @@ int loadimage(data* data, Imlib_Image imag, Screen *screen) {
   imlib_context_set_image(img);
 
   int angle = 0;
-  int imagenum = imgbits;
+  const int imagenum = imgbits;
   
   if (imagenum == 4 && (data[1].i & (1 << 1)) > 1 && data[1].i >> (MAGIC_BITS + IMAGE_BITS) != 0) {
     angle = data[1].i >> (MAGIC_BITS + IMAGE_BITS);
@@ -142,11 +143,23 @@ int loadimage(data* data, Imlib_Image imag, Screen *screen) {
         imlib_context_set_image(temp);
       }
       if (c) {
-        for (int x = left; x < scrW; x += imgW)
-          for (int y = top; y < scrW; y += imgH) {
+        for (int y = left; y < scrH; y += imgH) {
+          for (int x = top; x < scrW;) {
             buffer = ents[rand() % direntries];
-            imlib_blend_image_onto_image(buffer, 0, 0, 0, imgW, imgH, x, y, imgW, imgH);
+            Imlib_Image currentimage = imlib_context_get_image();
+            imlib_context_set_image(buffer);
+            const int bufW = imlib_image_get_width(), bufH = imlib_image_get_height();
+            imlib_context_set_image(currentimage);
+            imlib_blend_image_onto_image(buffer, 0, 0, 0, bufW, bufH, x, y, bufW, bufH);
+            x += imgW;
+            if ((data[1].i & (1 << 4)) > 1) {
+              Imlib_Image currentimage = imlib_context_get_image();
+              imlib_context_set_image(buffer);
+              x += (imlib_image_get_width() - imgW);
+              imlib_context_set_image(currentimage);
+            }
           }
+        }
       } else {
       for (int x = left; x < scrW; x += imgW)
         for (int y = top; y < scrW; y += imgH)
@@ -155,7 +168,7 @@ int loadimage(data* data, Imlib_Image imag, Screen *screen) {
       if (data[1].i >> (MAGIC_BITS + IMAGE_BITS) != 0) {
         imlib_context_set_image(temp);
         Imlib_Image rotated_temp = imlib_create_image(scrW, scrH);
-        double scl = sqrt(0.5);
+        #define scl 0.707
 
         int topleft_x  = (scrW>>1) * ( sin((3.1415/180) * (angle-45))/scl) + (scrW>>1);
         int topleft_y  = (scrH>>1) * (-cos((3.1415/180) * (angle-45))/scl) + (scrH>>1);
